@@ -4529,6 +4529,102 @@ static void block_completion_it(void *opaque, BlockDriverState *bs)
     }
 }
 
+static void add_qdev_completion(const char *parent_path, const char *name,
+                                bool trailing_slash)
+{
+    size_t parent_len = strlen(parent_path);
+    size_t name_len = strlen(name);
+    char *completion = qemu_malloc(parent_len + name_len + 2);
+
+    memcpy(completion, parent_path, parent_len);
+    memcpy(completion + parent_len, name, name_len);
+    if (trailing_slash) {
+        completion[parent_len + name_len] = '/';
+        completion[parent_len + name_len + 1] = 0;
+    } else {
+        completion[parent_len + name_len] = 0;
+    }
+    readline_add_completion(cur_mon->rs, completion);
+
+    qemu_free(completion);
+}
+
+static void *inspect_qdev_id(DeviceState *dev, void *opaque)
+{
+    const char *input = opaque;
+
+    if (dev->id && strncmp(dev->id, input, strlen(input)) == 0) {
+        add_qdev_completion("", dev->id, false);
+    }
+    return NULL;
+}
+
+static void qdev_completion(const char *input, bool find_bus)
+{
+    size_t parent_len, name_len;
+    char *parent_path;
+    const char *p;
+    char *name;
+    DeviceState *dev;
+    BusState *bus;
+
+    p = strrchr(input, '/');
+    if (!p) {
+        if (*input == '\0') {
+            readline_add_completion(cur_mon->rs, "/");
+        }
+        if (!find_bus) {
+            qdev_iterate_recursive(NULL, inspect_qdev_id, (void *)input);
+        }
+        return;
+    }
+
+    p++;
+    parent_path = qemu_strndup(input, p - input);
+    bus = qbus_find(parent_path);
+
+    if (bus) {
+        printf ("if bus\n");
+        parent_len = strlen(parent_path);
+        name_len = strlen(bus->name);
+        if (bus->parent && strncmp(bus->name, p, strlen(p)) == 0 &&
+            (parent_len - 1 < name_len ||
+             strncmp(parent_path + parent_len - 1 - name_len, bus->name,
+                     name_len) != 0)) {
+            add_qdev_completion(parent_path, bus->name, true);
+        }
+        QLIST_FOREACH(dev, &bus->children, sibling) {
+            name_len = strlen(dev->info->name) + 16;
+            name = qemu_malloc(name_len);
+            snprintf(name, name_len, "%s.%d", dev->info->name,
+                     qdev_instance_no(dev));
+            if (strncmp(name, p, strlen(p)) == 0) {
+                if (!find_bus) {
+                    add_qdev_completion(parent_path, name, false);
+                }
+                if (!QLIST_EMPTY(&dev->child_bus)) {
+                    add_qdev_completion(parent_path, name, true);
+                }
+            }
+            qemu_free(name);
+        }
+    } else {
+        parent_path[strlen(parent_path) - 1] = 0;
+        dev = qdev_find(parent_path, false);
+        if (dev) {
+            printf ("%s\n", parent_path);
+            parent_path[strlen(parent_path)] = '/';
+            QLIST_FOREACH(bus, &dev->child_bus, sibling) {
+                if (strncmp(bus->name, p, strlen(p)) == 0) {
+                    add_qdev_completion(parent_path, bus->name, true);
+                }
+            }
+        }
+    }
+    qemu_free(parent_path);
+}
+
+
 /* NOTE: this parser is an approximate form of the real command parser */
 static void parse_cmdline(const char *cmdline,
                          int *pnb_args, char **args)
@@ -4629,6 +4725,11 @@ static void monitor_find_completion(const char *cmdline)
             /* block device name completion */
             readline_set_completion_index(cur_mon->rs, strlen(str));
             bdrv_iterate(block_completion_it, (void *)str);
+            break;
+        case 'q':
+        case 'Q':
+            readline_set_completion_index(cur_mon->rs, strlen(str));
+            qdev_completion(str, (*ptype == 'q'));
             break;
         case 's':
             /* XXX: more generic ? */

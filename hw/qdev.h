@@ -194,6 +194,8 @@ typedef int (qdev_walkerfn)(DeviceState *dev, void *opaque);
 void qbus_create_inplace(BusState *bus, BusInfo *info,
                          DeviceState *parent, const char *name);
 BusState *qbus_create(BusInfo *info, DeviceState *parent, const char *name);
+void qbus_free(BusState *bus);
+BusState *qbus_find(const char *path);
 /* Returns > 0 if either devfn or busfn skip walk somewhere in cursion,
  *         < 0 if either devfn or busfn terminate walk somewhere in cursion,
  *           0 otherwise. */
@@ -203,8 +205,6 @@ int qdev_walk_children(DeviceState *dev, qdev_walkerfn *devfn,
                        qbus_walkerfn *busfn, void *opaque);
 void qdev_reset_all(DeviceState *dev);
 void qbus_reset_all_fn(void *opaque);
-
-void qbus_free(BusState *bus);
 
 #define FROM_QBUS(type, dev) DO_UPCAST(type, qbus, dev)
 

@@ -44,7 +44,6 @@ DeviceInfo *device_info_list;
 
 static BusState *qbus_find_recursive(BusState *bus, const char *name,
                                      const BusInfo *info);
-static BusState *qbus_find(const char *path);
 
 /* Register a new device type.  */
 void qdev_register(DeviceInfo *info)
@@ -595,6 +594,10 @@ static void qbus_list_dev(BusState *bus)
     DeviceState *dev;
     const char *sep = " ";
 
+    //if statement added from jan's code
+    if (monitor_cur_is_qmp()) {
+        return;
+    }
     error_printf("devices at \"%s\":", bus->name);
     QLIST_FOREACH(dev, &bus->children, sibling) {
         error_printf("%s\"%s\"", sep, dev->info->name);
@@ -620,6 +623,32 @@ static BusState *qbus_find_bus(DeviceState *dev, char *elem)
 static DeviceState *qbus_find_dev(BusState *bus, char *elem)
 {
     DeviceState *dev;
+    int instance, n;
+    char buf[128];
+
+    //XXX: temporary stuff. Remove later
+
+    if (sscanf(elem, "%127[^.].%u", buf, &instance) == 2) {
+        elem = buf;
+    } else {
+        instance = 0;
+    }
+
+    n = 0;
+    QLIST_FOREACH(dev, &bus->children, sibling) {
+        if (strcmp(dev->info->name, elem) == 0 && n++ == instance) {
+            return dev;
+        }
+    }
+
+    n = 0;
+    QLIST_FOREACH(dev, &bus->children, sibling) {
+        if (dev->info->alias && strcmp(dev->info->alias, elem) == 0 &&
+            n++ == instance) {
+            return dev;
+        }
+    }
+    return NULL;
 
     /*
      * try to match in order:
@@ -627,6 +656,7 @@ static DeviceState *qbus_find_dev(BusState *bus, char *elem)
      *   (2) driver name
      *   (3) driver alias, if present
      */
+    /*
     QLIST_FOREACH(dev, &bus->children, sibling) {
         if (dev->id  &&  strcmp(dev->id, elem) == 0) {
             return dev;
@@ -643,9 +673,10 @@ static DeviceState *qbus_find_dev(BusState *bus, char *elem)
         }
     }
     return NULL;
+    */
 }
 
-static BusState *qbus_find(const char *path)
+BusState *qbus_find(const char *path)
 {
     DeviceState *dev;
     BusState *bus;
@@ -985,13 +1016,16 @@ DeviceState *qdev_find(const char *path, bool report_errors)
     DeviceState *dev;
     char *bus_path;
     BusState *bus;
-
+ 
+    printf ("\n1. Within qdev_find(%s)\n", path);
     /* search for unique ID recursively if path is not absolute */
     if (path[0] != '/') {
         dev = qdev_find_id_recursive(main_system_bus, path);
         if (!dev && report_errors) {
+            printf ("1.1 not found dev: Within qdev_find(%s)\n", path);
             qerror_report(QERR_DEVICE_NOT_FOUND, path);
         }
+        printf ("1.1 found dev: Within qdev_find(%s)\n", path);
         return dev;
     }
 
@@ -1001,6 +1035,7 @@ DeviceState *qdev_find(const char *path, bool report_errors)
     bus_path[dev_name - path] = 0;
 
     bus = qbus_find(bus_path);
+    printf ("2. UniqueId-check-fail: Within qdev_find(%s): bus_path: %s, dev_name: %s\n", path, bus_path, dev_name);
     qemu_free(bus_path);
     if (!bus) {
         if (report_errors) {
@@ -1013,6 +1048,7 @@ DeviceState *qdev_find(const char *path, bool report_errors)
         dev_name = (char *)"";
     }
 
+    printf ("3. Post bus check: Within qdev_find(%s): bus_path: %s, dev_name: %s\n", path, bus_path, dev_name);
     dev = qbus_find_dev(bus, dev_name);
     if (!dev && report_errors) {
         qerror_report(QERR_DEVICE_NOT_FOUND, dev_name);
