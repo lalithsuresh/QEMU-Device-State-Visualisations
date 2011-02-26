@@ -302,6 +302,7 @@ enum VMStateFlags {
 
 typedef struct {
     const char *name;
+    const char *start_index;
     size_t offset;
     size_t size;
     size_t start;

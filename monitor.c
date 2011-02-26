@@ -110,6 +110,7 @@ typedef struct mon_cmd_t {
     const char *params;
     const char *help;
     void (*user_print)(Monitor *mon, const QObject *data);
+    const char *user_args_type;
     union {
         void (*info)(Monitor *mon);
         void (*info_new)(Monitor *mon, QObject **ret_data);
@@ -342,6 +343,11 @@ static inline int handler_is_qobject(const mon_cmd_t *cmd)
 static inline bool handler_is_async(const mon_cmd_t *cmd)
 {
     return cmd->flags & MONITOR_CMD_ASYNC;
+}
+
+static inline bool monitor_cmd_user_only(const mon_cmd_t *cmd)
+{
+    return (cmd->flags & MONITOR_CMD_USER_ONLY);
 }
 
 static inline int monitor_has_error(const Monitor *mon)

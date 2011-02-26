@@ -29,6 +29,9 @@
 #include "qdev.h"
 #include "sysemu.h"
 #include "monitor.h"
+#include "qjson.h"
+#include "qbuffer.h"
+#include "qint.h"
 
 static int qdev_hotplug = 0;
 static bool qdev_hot_added = false;
@@ -935,4 +938,351 @@ char* qdev_get_fw_dev_path(DeviceState *dev)
     path[l-1] = '\0';
 
     return strdup(path);
+}
+
+void *qdev_iterate_recursive(BusState *bus, qdev_iteratefn callback,
+                             void *opaque)
+{
+    DeviceState *dev, *ret;
+    BusState *child;
+
+    if (!bus) {
+        bus = main_system_bus;
+    }
+    QLIST_FOREACH(dev, &bus->children, sibling) {
+        ret = callback(dev, opaque);
+        if (ret) {
+            return ret;
+        }
+        QLIST_FOREACH(child, &dev->child_bus, sibling) {
+            ret = qdev_iterate_recursive(child, callback, opaque);
+            if (ret) {
+                return ret;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void *find_id_callback(DeviceState *dev, void *opaque)
+{
+    const char *id = opaque;
+
+    if (dev->id && strcmp(dev->id, id) == 0) {
+        return dev;
+    }
+    return NULL;
+}
+
+static DeviceState *qdev_find_id_recursive(BusState *bus, const char *id)
+{
+    return qdev_iterate_recursive(bus, find_id_callback, (void *)id);
+}
+
+DeviceState *qdev_find(const char *path, bool report_errors)
+{
+    char *dev_name;
+    DeviceState *dev;
+    char *bus_path;
+    BusState *bus;
+
+    /* search for unique ID recursively if path is not absolute */
+    if (path[0] != '/') {
+        dev = qdev_find_id_recursive(main_system_bus, path);
+        if (!dev && report_errors) {
+            qerror_report(QERR_DEVICE_NOT_FOUND, path);
+        }
+        return dev;
+    }
+
+    dev_name = strrchr(path, '/') + 1;
+
+    bus_path = qemu_strdup(path);
+    bus_path[dev_name - path] = 0;
+
+    bus = qbus_find(bus_path);
+    qemu_free(bus_path);
+    if (!bus) {
+        if (report_errors) {
+            /* retry with full path to generate correct error message */
+            bus = qbus_find(path);
+        }
+        if (!bus) {
+            return NULL;
+        }
+        dev_name = (char *)"";
+    }
+
+    dev = qbus_find_dev(bus, dev_name);
+    if (!dev && report_errors) {
+        qerror_report(QERR_DEVICE_NOT_FOUND, dev_name);
+        qbus_list_dev(bus);
+    }
+    return dev;
+}
+
+int qdev_instance_no(DeviceState *dev)
+{
+    struct DeviceState *sibling;
+    int instance = 0;
+
+    QLIST_FOREACH(sibling, &dev->parent_bus->children, sibling) {
+        if (sibling->info == dev->info) {
+            if (sibling == dev) {
+                break;
+            }
+            instance++;
+        }
+    }
+    return instance;
+}
+
+#define NAME_COLUMN_WIDTH 23
+
+static void print_field(Monitor *mon, const QDict *qfield, int indent);
+
+static void print_elem(Monitor *mon, const QObject *qelem, size_t size,
+                       int column_pos, int indent)
+{
+    int64_t data_size;
+    const void *data;
+    int n;
+
+    if (qobject_type(qelem) == QTYPE_QDICT) {
+        if (column_pos >= 0) {
+            monitor_printf(mon, ".\n");
+        }
+    } else {
+        monitor_printf(mon, ":");
+        column_pos++;
+        if (column_pos < NAME_COLUMN_WIDTH) {
+            monitor_printf(mon, "%*c", NAME_COLUMN_WIDTH - column_pos, ' ');
+        }
+    }
+
+    switch (qobject_type(qelem)) {
+    case QTYPE_QDICT:
+        print_field(mon, qobject_to_qdict(qelem), indent + 2);
+        break;
+    case QTYPE_QBUFFER:
+        data = qbuffer_get_data(qobject_to_qbuffer(qelem));
+        data_size = qbuffer_get_size(qobject_to_qbuffer(qelem));
+        for (n = 0; n < data_size; ) {
+            monitor_printf(mon, " %02x", *((uint8_t *)data+n));
+            if (++n < size) {
+                if (n % 16 == 0) {
+                    monitor_printf(mon, "\n%*c", NAME_COLUMN_WIDTH, ' ');
+                } else if (n % 8 == 0) {
+                    monitor_printf(mon, " -");
+                }
+            }
+        }
+        if (data_size < size) {
+            monitor_printf(mon, " ...");
+        }
+        monitor_printf(mon, "\n");
+        break;
+    case QTYPE_QINT:
+        monitor_printf(mon, " %0*" PRIx64 "\n", (int)size * 2,
+                       qint_get_int(qobject_to_qint(qelem)));
+        break;
+    default:
+        assert(0);
+    }
+}
+
+static void print_field(Monitor *mon, const QDict *qfield, int indent)
+{
+    const char *name = qdict_get_str(qfield, "name");
+    // XXX: See fixme below
+    // const char *start = qdict_get_try_str(qfield, "start");
+    int64_t size = qdict_get_int(qfield, "size");
+    QList *qlist = qdict_get_qlist(qfield, "elems");
+    QListEntry *entry, *sub_entry;
+    QList *sub_list;
+    int elem_no = 0;
+
+    QLIST_FOREACH_ENTRY(qlist, entry) {
+        QObject *qelem = qlist_entry_obj(entry);
+        int pos = indent + strlen(name);
+
+        if (qobject_type(qelem) == QTYPE_QLIST) {
+            monitor_printf(mon, "%*c%s", indent, ' ', name);
+            // XXX: monitor_printf() returns void, need to fix this
+            /*
+            if (start) {
+                pos += monitor_printf(mon, "[%s+%02x]", start, elem_no);
+            } else {
+                pos += monitor_printf(mon, "[%02x]", elem_no);
+            }*/
+            sub_list = qobject_to_qlist(qelem);
+            QLIST_FOREACH_ENTRY(sub_list, sub_entry) {
+                print_elem(mon, qlist_entry_obj(sub_entry), size, pos,
+                           indent + 2);
+                pos = -1;
+            }
+        } else {
+            if (elem_no == 0) {
+                monitor_printf(mon, "%*c%s", indent, ' ', name);
+            } else {
+                pos = -1;
+            }
+            print_elem(mon, qelem, size, pos, indent);
+        }
+        elem_no++;
+    }
+}
+
+void device_user_print(Monitor *mon, const QObject *data)
+{
+    QDict *qdict = qobject_to_qdict(data);
+    QList *qlist = qdict_get_qlist(qdict, "fields");
+    QListEntry *entry;
+
+    monitor_printf(mon, "dev: %s, id \"%s\", version %" PRId64 "\n",
+                   qdict_get_str(qdict, "device"),
+                   qdict_get_str(qdict, "id"),
+                   qdict_get_int(qdict, "version"));
+
+    QLIST_FOREACH_ENTRY(qlist, entry) {
+        print_field(mon, qobject_to_qdict(qlist_entry_obj(entry)), 2);
+    }
+}
+
+static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
+                            QList *qlist, int full_buffers)
+{
+    VMStateField *field = vmsd->fields;
+    size_t overall_size = 0;
+
+    if (vmsd->pre_save) {
+        vmsd->pre_save(opaque);
+    }
+    while(field->name) {
+        if (!field->field_exists ||
+            field->field_exists(opaque, vmsd->version_id)) {
+            void *base_addr = opaque + field->offset;
+            int i, n_elems = 1;
+            int is_array = 1;
+            size_t size = field->size;
+            size_t real_size = 0;
+            size_t dump_size;
+            QDict *qfield = qdict_new();
+            QList *qelems = qlist_new();
+
+            qlist_append_obj(qlist, QOBJECT(qfield));
+
+            qdict_put_obj(qfield, "name",
+                          QOBJECT(qstring_from_str(field->name)));
+            qdict_put_obj(qfield, "elems", QOBJECT(qelems));
+
+            if (field->flags & VMS_VBUFFER) {
+                size = *(int32_t *)(opaque + field->size_offset);
+                if (field->flags & VMS_MULTIPLY) {
+                    size *= field->size;
+                }
+            }
+            if (field->start_index) {
+                qdict_put_obj(qfield, "start",
+                              QOBJECT(qstring_from_str(field->start_index)));
+            }
+
+            if (field->flags & VMS_ARRAY) {
+                n_elems = field->num;
+            } else if (field->flags & VMS_VARRAY_INT32) {
+                n_elems = *(int32_t *)(opaque + field->num_offset);
+            } else if (field->flags & VMS_VARRAY_UINT16) {
+                n_elems = *(uint16_t *)(opaque + field->num_offset);
+            } else {
+                is_array = 0;
+            }
+            if (field->flags & VMS_POINTER) {
+                base_addr = *(void **)base_addr + field->start;
+            }
+            for (i = 0; i < n_elems; i++) {
+                void *addr = base_addr + size * i;
+                QList *sub_elems = qelems;
+                int val;
+
+                if (is_array) {
+                    sub_elems = qlist_new();
+                    qlist_append_obj(qelems, QOBJECT(sub_elems));
+                }
+                if (field->flags & VMS_ARRAY_OF_POINTER) {
+                    addr = *(void **)addr;
+                }
+                if (field->flags & VMS_STRUCT) {
+                    real_size = parse_vmstate(field->vmsd, addr,
+                                              sub_elems, full_buffers);
+                } else {
+                    real_size = size;
+                    if (field->flags & (VMS_BUFFER | VMS_VBUFFER)) {
+                        dump_size = (full_buffers || size <= 16) ? size : 16;
+                        qlist_append_obj(sub_elems,
+                                QOBJECT(qbuffer_from_data(addr, dump_size)));
+                    } else {
+                        switch (size) {
+                        case 1:
+                            val = *(uint8_t *)addr;
+                            break;
+                        case 2:
+                            val = *(uint16_t *)addr;
+                            break;
+                        case 4:
+                            val = *(uint32_t *)addr;
+                            break;
+                        case 8:
+                            val = *(uint64_t *)addr;
+                            break;
+                        default:
+                            assert(0);
+                        }
+                        qlist_append_obj(sub_elems,
+                                         QOBJECT(qint_from_int(val)));
+                    }
+                }
+                overall_size += real_size;
+            }
+            qdict_put_obj(qfield, "size", QOBJECT(qint_from_int(real_size)));
+        }
+        field++;
+    }
+    return overall_size;
+}
+
+
+int do_device_show(Monitor *mon, const QDict *qdict, QObject **ret_data)
+{
+    const char *path = qdict_get_str(qdict, "path");
+    const VMStateDescription *vmsd;
+    DeviceState *dev;
+    QList *qlist;
+    int name_len;
+    char *name;
+
+    dev = qdev_find(path, true);
+    if (!dev) {
+        return -1;
+    }
+
+    vmsd = dev->info->vmsd;
+    if (!vmsd) {
+        //XXX: QERR_DEVICE_NO_STATE?
+        //qerror_report(0 /*QERR_DEVICE_NO_STATE*/, dev->info->name);
+        error_printf_unless_qmp("Note: device may simply lack complete qdev "
+                                "conversion\n");
+        return -1;
+    }
+
+    name_len = strlen(dev->info->name) + 16;
+    name = qemu_malloc(name_len);
+    snprintf(name, name_len, "%s.%d", dev->info->name, qdev_instance_no(dev));
+    *ret_data = qobject_from_jsonf("{ 'device': %s, 'id': %s, 'version': %d }",
+                                   name, dev->id ? : "", vmsd->version_id);
+    qemu_free(name);
+    qlist = qlist_new();
+    parse_vmstate(vmsd, dev, qlist, qdict_get_int(qdict, "full"));
+    qdict_put_obj(qobject_to_qdict(*ret_data), "fields", QOBJECT(qlist));
+
+    return 0;
 }

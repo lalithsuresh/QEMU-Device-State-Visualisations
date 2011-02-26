@@ -145,6 +145,8 @@ BusState *qdev_get_child_bus(DeviceState *dev, const char *name);
 typedef int (*qdev_initfn)(DeviceState *dev, DeviceInfo *info);
 typedef int (*qdev_event)(DeviceState *dev);
 typedef void (*qdev_resetfn)(DeviceState *dev);
+typedef void *(*qdev_iteratefn)(DeviceState *dev, void *opaque);
+
 
 struct DeviceInfo {
     const char *name;
@@ -215,6 +217,7 @@ void do_info_qtree(Monitor *mon);
 void do_info_qdm(Monitor *mon);
 int do_device_add(Monitor *mon, const QDict *qdict, QObject **ret_data);
 int do_device_del(Monitor *mon, const QDict *qdict, QObject **ret_data);
+int do_device_show(Monitor *mon, const QDict *qdict, QObject **ret_data);
 
 /*** qdev-properties.c ***/
 
@@ -316,14 +319,19 @@ void qdev_prop_set_defaults(DeviceState *dev, Property *props);
 
 void qdev_prop_register_global_list(GlobalProperty *props);
 void qdev_prop_set_globals(DeviceState *dev);
+DeviceState *qdev_find(const char *path, bool report_errors);
 
 static inline const char *qdev_fw_name(DeviceState *dev)
 {
     return dev->info->fw_name ? : dev->info->alias ? : dev->info->name;
 }
 
+void *qdev_iterate_recursive(BusState *bus, qdev_iteratefn callback,
+                             void *opaque);
 char *qdev_get_fw_dev_path(DeviceState *dev);
 /* This is a nasty hack to allow passing a NULL bus to qdev_create.  */
 extern struct BusInfo system_bus_info;
+int qdev_instance_no(DeviceState *dev);
+void device_user_print(Monitor *mon, const QObject *data);
 
 #endif

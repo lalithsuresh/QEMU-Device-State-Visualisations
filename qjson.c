@@ -20,6 +20,8 @@
 #include "qbool.h"
 #include "qfloat.h"
 #include "qdict.h"
+#include "qbuffer.h"
+#include "base64.h"
 
 typedef struct JSONParsingState
 {
@@ -266,6 +268,19 @@ static void to_json(const QObject *obj, QString *str, int pretty, int indent)
         } else {
             qstring_append(str, "false");
         }
+        break;
+    }
+    case QTYPE_QBUFFER: {
+        QBuffer *val = qobject_to_qbuffer(obj);
+        size_t data_size = qbuffer_get_size(val);
+        size_t str_len = ((data_size + 2) / 3) * 4;
+        char *buffer = qemu_malloc(str_len + 1);
+
+        base64_encode(qbuffer_get_data(val), data_size, buffer);
+        qstring_append(str, "{\"__class__\": \"buffer\", \"data\": \"");
+        qstring_append(str, buffer);
+        qstring_append(str, "\"}");
+        qemu_free(buffer);
         break;
     }
     case QTYPE_QERROR:
