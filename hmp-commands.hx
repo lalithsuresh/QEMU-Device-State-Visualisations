@@ -586,6 +586,22 @@ Remove device @var{id}.
 ETEXI
 
     {
+        .name       = "device_show",
+        .args_type  = "path:Q",
+        .params     = "device [-f]",
+        .help       = "show device state (specify -f for full buffer dumping)",
+        .user_print = device_user_print,
+        .mhandler.cmd_new = do_device_show,
+    },
+
+STEXI
+@item device_show @var{path}
+@findex device_show
+
+Show Device @var{path}.
+ETEXI
+
+    {
         .name       = "cpu",
         .args_type  = "index:i",
         .params     = "index",

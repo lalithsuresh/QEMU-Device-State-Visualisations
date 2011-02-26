@@ -4031,6 +4031,8 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
         switch(c) {
         case 'F':
         case 'B':
+        case 'q':
+        case 'Q':
         case 's':
             {
                 int ret;
@@ -4053,6 +4055,14 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                         break;
                     case 'B':
                         monitor_printf(mon, "%s: block device name expected\n",
+                                       cmdname);
+                        break;
+                    case 'q':
+                        monitor_printf(mon, "%s: qdev bus path expected\n",
+                                       cmdname);
+                        break;
+                    case 'Q':
+                        monitor_printf(mon, "%s: qdev device path expected\n",
                                        cmdname);
                         break;
                     default:
