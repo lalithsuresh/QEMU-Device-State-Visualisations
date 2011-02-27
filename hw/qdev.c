@@ -1302,8 +1302,7 @@ int do_device_show(Monitor *mon, const QDict *qdict, QObject **ret_data)
 
     vmsd = dev->info->vmsd;
     if (!vmsd) {
-        //XXX: QERR_DEVICE_NO_STATE?
-        //qerror_report(0 /*QERR_DEVICE_NO_STATE*/, dev->info->name);
+        qerror_report(QERR_DEVICE_NO_STATE, dev->info->name);
         error_printf_unless_qmp("Note: device may simply lack complete qdev "
                                 "conversion\n");
         return -1;
@@ -1318,7 +1317,6 @@ int do_device_show(Monitor *mon, const QDict *qdict, QObject **ret_data)
     qlist = qlist_new();
     parse_vmstate(vmsd, dev, qlist, 0 /*qdict_get_int(qdict, "full")*/);
     qdict_put_obj(qobject_to_qdict(*ret_data), "fields", QOBJECT(qlist));
-    printf ("qdict_put_obj\n");
 
     return 0;
 }

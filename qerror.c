@@ -101,6 +101,10 @@ static const QErrorStringTable qerror_table[] = {
         .desc      = "Device '%(device)' has no child bus",
     },
     {
+        .error_fmt = QERR_DEVICE_NO_STATE,
+        .desc      = "No state available for device '%(device)'",
+    },
+    {
         .error_fmt = QERR_DEVICE_NO_HOTPLUG,
         .desc      = "Device '%(device)' does not support hotplugging",
     },
