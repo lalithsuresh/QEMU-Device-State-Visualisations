@@ -4584,7 +4584,6 @@ static void qdev_completion(const char *input, bool find_bus)
     bus = qbus_find(parent_path);
 
     if (bus) {
-        printf ("if bus\n");
         parent_len = strlen(parent_path);
         name_len = strlen(bus->name);
         if (bus->parent && strncmp(bus->name, p, strlen(p)) == 0 &&

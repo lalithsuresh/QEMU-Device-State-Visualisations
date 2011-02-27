@@ -1017,15 +1017,15 @@ DeviceState *qdev_find(const char *path, bool report_errors)
     char *bus_path;
     BusState *bus;
  
-    printf ("\n1. Within qdev_find(%s)\n", path);
+    //printf ("\n1. Within qdev_find(%s)\n", path);
     /* search for unique ID recursively if path is not absolute */
     if (path[0] != '/') {
         dev = qdev_find_id_recursive(main_system_bus, path);
         if (!dev && report_errors) {
-            printf ("1.1 not found dev: Within qdev_find(%s)\n", path);
+            //printf ("1.1 not found dev: Within qdev_find(%s)\n", path);
             qerror_report(QERR_DEVICE_NOT_FOUND, path);
         }
-        printf ("1.1 found dev: Within qdev_find(%s)\n", path);
+        //printf ("1.1 found dev: Within qdev_find(%s)\n", path);
         return dev;
     }
 
@@ -1035,7 +1035,6 @@ DeviceState *qdev_find(const char *path, bool report_errors)
     bus_path[dev_name - path] = 0;
 
     bus = qbus_find(bus_path);
-    printf ("2. UniqueId-check-fail: Within qdev_find(%s): bus_path: %s, dev_name: %s\n", path, bus_path, dev_name);
     qemu_free(bus_path);
     if (!bus) {
         if (report_errors) {
@@ -1048,7 +1047,6 @@ DeviceState *qdev_find(const char *path, bool report_errors)
         dev_name = (char *)"";
     }
 
-    printf ("3. Post bus check: Within qdev_find(%s): bus_path: %s, dev_name: %s\n", path, bus_path, dev_name);
     dev = qbus_find_dev(bus, dev_name);
     if (!dev && report_errors) {
         qerror_report(QERR_DEVICE_NOT_FOUND, dev_name);
@@ -1188,9 +1186,10 @@ void device_user_print(Monitor *mon, const QObject *data)
 static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
                             QList *qlist, int full_buffers)
 {
-    VMStateField *field = vmsd->fields;
+    VMStateField *field;
     size_t overall_size = 0;
 
+    field = vmsd->fields;
     if (vmsd->pre_save) {
         vmsd->pre_save(opaque);
     }
@@ -1317,8 +1316,9 @@ int do_device_show(Monitor *mon, const QDict *qdict, QObject **ret_data)
                                    name, dev->id ? : "", vmsd->version_id);
     qemu_free(name);
     qlist = qlist_new();
-    parse_vmstate(vmsd, dev, qlist, qdict_get_int(qdict, "full"));
+    parse_vmstate(vmsd, dev, qlist, 0 /*qdict_get_int(qdict, "full")*/);
     qdict_put_obj(qobject_to_qdict(*ret_data), "fields", QOBJECT(qlist));
+    printf ("qdict_put_obj\n");
 
     return 0;
 }
