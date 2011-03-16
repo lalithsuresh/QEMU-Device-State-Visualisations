@@ -113,7 +113,7 @@ typedef struct E1000State_st {
         char tse;
         int8_t ip;
         int8_t tcp;
-        char cptse;     // current packet tse bit
+        bool cptse;     // current packet tse bit
     } tx;
 
     struct {
@@ -947,6 +947,7 @@ static const VMStateDescription vmstate_e1000 = {
         VMSTATE_UINT8(tx.sum_needed, E1000State),
         VMSTATE_INT8(tx.ip, E1000State),
         VMSTATE_INT8(tx.tcp, E1000State),
+        VMSTATE_BOOL(tx.cptse, E1000State),
         VMSTATE_BUFFER(tx.header, E1000State),
         VMSTATE_BUFFER(tx.data, E1000State),
         VMSTATE_UINT16_ARRAY(eeprom_data, E1000State, 64),

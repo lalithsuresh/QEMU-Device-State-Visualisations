@@ -4298,7 +4298,7 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
         case '-':
             {
                 const char *tmp = p;
-                int skip_key = 0;
+                int has_option = 0, skip_key = 0;
                 /* option */
 
                 c = *typestr++;
@@ -4323,9 +4323,10 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                     } else {
                         /* has option */
                         p++;
-                        qdict_put(qdict, key, qbool_from_int(1));
+                        has_option = 1;
                     }
                 }
+                qdict_put(qdict, key, qbool_from_int(has_option));
             }
             break;
         default:
