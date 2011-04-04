@@ -1117,7 +1117,7 @@ static void print_elem(Monitor *mon, const QObject *qelem, size_t size,
         monitor_printf(mon, "\n");
         break;
     case QTYPE_QINT:
-        monitor_printf(mon, " %0*" PRIx64 "\n", (int)size * 2,
+        monitor_printf(mon, "%0*" PRIx64 "\n", (int)size * 2,
                        qint_get_int(qobject_to_qint(qelem)));
         break;
     default:
@@ -1222,6 +1222,7 @@ static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
                               QOBJECT(qstring_from_str(field->start_index)));
             }
 
+            printf ("\nName: %s, field->offset: %d", field->name, field->offset);
             if (field->flags & VMS_ARRAY) {
                 n_elems = field->num;
             } else if (field->flags & VMS_VARRAY_INT32) {
@@ -1256,22 +1257,33 @@ static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
                         qlist_append_obj(sub_elems,
                                 QOBJECT(qbuffer_from_data(addr, dump_size)));
                     } else {
+
                         switch (size) {
-                        case 1:
+                          case 1:
                             val = *(uint8_t *)addr;
                             break;
-                        case 2:
+                          case 2:
                             val = *(uint16_t *)addr;
                             break;
-                        case 4:
+                          case 4:
                             val = *(uint32_t *)addr;
                             break;
-                        case 8:
+                          case 8:
                             val = *(uint64_t *)addr;
                             break;
-                        default:
+                          default:
                             assert(0);
                         }
+                        
+                        // If it's a bitfield, we apply the
+                        // mask on the value and only specify
+                        // if the bit is set or not.
+                        if (field->flags & (VMS_BITFIELD))
+                          {
+                            val = val & (field->bit_field_mask);
+                            val = !(val == 0);
+                          }
+ 
                         qlist_append_obj(sub_elems,
                                          QOBJECT(qint_from_int(val)));
                     }

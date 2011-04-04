@@ -928,7 +928,7 @@ static int apic_load_old(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static const VMStateDescription vmstate_apic = {
+const VMStateDescription vmstate_apic = {
     .name = "apic",
     .version_id = 3,
     .minimum_version_id = 3,
@@ -947,6 +947,7 @@ static const VMStateDescription vmstate_apic = {
         VMSTATE_UINT32_ARRAY(irr, APICState, 8),
         VMSTATE_UINT32_ARRAY(lvt, APICState, APIC_LVT_NB),
         VMSTATE_UINT32(esr, APICState),
+        VMSTATE_BITFIELD(lvt[APIC_LVT_TIMER], APICState, APIC_LVT_TIMER, APIC_LVT_TIMER_PERIODIC),
         VMSTATE_UINT32_ARRAY(icr, APICState, 2),
         VMSTATE_UINT32(divide_conf, APICState),
         VMSTATE_INT32(count_shift, APICState),
