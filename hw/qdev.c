@@ -1207,8 +1207,16 @@ static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
 
             qlist_append_obj(qlist, QOBJECT(qfield));
 
-            qdict_put_obj(qfield, "name",
+            if (field->flags & VMS_BITFIELD)
+            {
+              qdict_put_obj(qfield, "name",
+                          QOBJECT(qstring_from_str(field->bit_field_name)));
+            }
+            else
+            {
+              qdict_put_obj(qfield, "name",
                           QOBJECT(qstring_from_str(field->name)));
+            }
             qdict_put_obj(qfield, "elems", QOBJECT(qelems));
 
             if (field->flags & VMS_VBUFFER) {

@@ -315,7 +315,6 @@ typedef struct {
     const VMStateDescription *vmsd;
     int version_id;
     bool bit_field_mask;
-    bool bit_field_offset;
     const char *bit_field_name;
     bool (*field_exists)(void *opaque, int version_id);
 } VMStateField;
@@ -324,12 +323,6 @@ typedef struct VMStateSubsection {
     const VMStateDescription *vmsd;
     bool (*needed)(void *opaque);
 } VMStateSubsection;
-
-typedef struct VMStateBitField {
-  const char *name;
-  bool value;
-  const VMStateDescription *vmsd;
-} VMStateBitField;
 
 struct VMStateDescription {
     const char *name;
@@ -342,7 +335,6 @@ struct VMStateDescription {
     void (*pre_save)(void *opaque);
     VMStateField *fields;
     const VMStateSubsection *subsections;
-    VMStateBitField *bitfields;
 };
 
 extern const VMStateInfo vmstate_info_bool;
@@ -623,14 +615,14 @@ extern const VMStateDescription vmstate_usb_device;
 
 extern const VMStateDescription vmstate_apic;
 
-#define VMSTATE_BITFIELD(_field, _state, _offset, _mask) {      \
+#define VMSTATE_BITFIELD(_field, _state, _offset, _mask, _name) {      \
     .name         = (stringify(_field)),                        \
     .vmsd         = (&vmstate_apic),                            \
     .size         = (sizeof(typeof_field(_state, _field))),                             \
     .flags        = VMS_BITFIELD,                               \
     .offset     = offsetof(_state, _field),            \
-    .bit_field_offset = (_offset),                              \
     .bit_field_mask = (_mask),                                  \
+    .bit_field_name = _name,                                  \
 }
 
 /* _f : field name
