@@ -500,7 +500,6 @@ static USBDevice *usb_serial_init(const char *filename)
     char label[32];
     static int index;
 
-    printf ("usb_serial_init called!\n");
     while (*filename && *filename != ':') {
         const char *p;
         char *e;
@@ -555,7 +554,6 @@ static USBDevice *usb_braille_init(const char *unused)
     USBDevice *dev;
     CharDriverState *cdrv;
 
-    printf ("usb_braille_init called!\n");
     cdrv = qemu_chr_open("braille", "braille", NULL);
     if (!cdrv)
         return NULL;
