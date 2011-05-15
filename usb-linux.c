@@ -1090,6 +1090,8 @@ USBDevice *usb_host_device_open(const char *devname)
 
     dev = usb_create(NULL /* FIXME */, "usb-host");
 
+    printf ("usb_host_device called!\n");
+
     if (strstr(devname, "auto:")) {
         if (parse_filter(devname, &filter) < 0) {
             goto fail;

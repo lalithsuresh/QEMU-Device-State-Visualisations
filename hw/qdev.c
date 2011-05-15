@@ -127,6 +127,7 @@ DeviceState *qdev_try_create(BusState *bus, const char *name)
     }
 
     info = qdev_find_info(bus->info, name);
+
     if (!info) {
         return NULL;
     }
@@ -285,6 +286,7 @@ int qdev_init(DeviceState *dev)
         qdev_free(dev);
         return rc;
     }
+
     if (dev->info->vmsd) {
         vmstate_register_with_alias_id(dev, -1, dev->info->vmsd, dev,
                                        dev->instance_id_alias,
@@ -1207,16 +1209,13 @@ static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
 
             qlist_append_obj(qlist, QOBJECT(qfield));
 
-            if (field->flags & VMS_BITFIELD)
+            if (field->flags & (VMS_BITFIELD))
             {
-              qdict_put_obj(qfield, "name",
-                          QOBJECT(qstring_from_str(field->bit_field_name)));
+              field->name = field->bit_field_name;
             }
-            else
-            {
-              qdict_put_obj(qfield, "name",
+
+            qdict_put_obj(qfield, "name",
                           QOBJECT(qstring_from_str(field->name)));
-            }
             qdict_put_obj(qfield, "elems", QOBJECT(qelems));
 
             if (field->flags & VMS_VBUFFER) {
@@ -1266,34 +1265,43 @@ static size_t parse_vmstate(const VMStateDescription *vmsd, void *opaque,
                                 QOBJECT(qbuffer_from_data(addr, dump_size)));
                     } else {
 
-                        switch (size) {
-                          case 1:
-                            val = *(uint8_t *)addr;
-                            break;
-                          case 2:
-                            val = *(uint16_t *)addr;
-                            break;
-                          case 4:
-                            val = *(uint32_t *)addr;
-                            break;
-                          case 8:
-                            val = *(uint64_t *)addr;
-                            break;
-                          default:
-                            assert(0);
+                        if (field->flags & VMS_QUEUE)
+                        {
+                          //QLIST_FOREACH_ENTRY(field->name, entry) {
+                            field->queue_print_cb ((void *) addr);  
+//                          }
                         }
-                        
-                        // If it's a bitfield, we apply the
-                        // mask on the value and only specify
-                        // if the bit is set or not.
-                        if (field->flags & (VMS_BITFIELD))
-                          {
-                            val = val & (field->bit_field_mask);
-                            val = !(val == 0);
+                        else
+                        {
+                          switch (size) {
+                            case 1:
+                              val = *(uint8_t *)addr;
+                              break;
+                            case 2:
+                              val = *(uint16_t *)addr;
+                              break;
+                            case 4:
+                              val = *(uint32_t *)addr;
+                              break;
+                            case 8:
+                              val = *(uint64_t *)addr;
+                              break;
+                            default:
+                              assert(0);
                           }
- 
-                        qlist_append_obj(sub_elems,
-                                         QOBJECT(qint_from_int(val)));
+                          
+                          // If it's a bitfield, we apply the
+                          // mask on the value and only specify
+                          // if the bit is set or not.
+                          if (field->flags & (VMS_BITFIELD))
+                            {
+                              val = val & (field->bit_field_mask);
+                              val = !(val == 0);
+                            }
+   
+                          qlist_append_obj(sub_elems,
+                                           QOBJECT(qint_from_int(val)));
+                        }
                     }
                 }
                 overall_size += real_size;

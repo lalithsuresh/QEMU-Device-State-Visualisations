@@ -299,6 +299,7 @@ enum VMStateFlags {
     VMS_VBUFFER          = 0x100,  /* Buffer with size in int32_t field */
     VMS_MULTIPLY         = 0x200,  /* multiply "size" field by field_size */
     VMS_BITFIELD         = 0x400,  /* apply bitfield_mask on field itself */
+    VMS_QUEUE            = 0x800,  /* iterate over buffer */
 };
 
 typedef struct {
@@ -314,8 +315,10 @@ typedef struct {
     enum VMStateFlags flags;
     const VMStateDescription *vmsd;
     int version_id;
-    bool bit_field_mask;
+    uint32_t bit_field_mask;
+    bool bit_field_offset;
     const char *bit_field_name;
+    void (*queue_print_cb) (void *opaque);
     bool (*field_exists)(void *opaque, int version_id);
 } VMStateField;
 
@@ -323,6 +326,12 @@ typedef struct VMStateSubsection {
     const VMStateDescription *vmsd;
     bool (*needed)(void *opaque);
 } VMStateSubsection;
+
+typedef struct VMStateBitField {
+  const char *name;
+  bool value;
+  const VMStateDescription *vmsd;
+} VMStateBitField;
 
 struct VMStateDescription {
     const char *name;
@@ -335,6 +344,7 @@ struct VMStateDescription {
     void (*pre_save)(void *opaque);
     VMStateField *fields;
     const VMStateSubsection *subsections;
+    VMStateBitField *bitfields;
 };
 
 extern const VMStateInfo vmstate_info_bool;
@@ -615,14 +625,23 @@ extern const VMStateDescription vmstate_usb_device;
 
 extern const VMStateDescription vmstate_apic;
 
-#define VMSTATE_BITFIELD(_field, _state, _offset, _mask, _name) {      \
+#define VMSTATE_BITFIELD(_field, _state, _offset, _mask, _alias) {      \
     .name         = (stringify(_field)),                        \
     .vmsd         = (&vmstate_apic),                            \
     .size         = (sizeof(typeof_field(_state, _field))),                             \
     .flags        = VMS_BITFIELD,                               \
     .offset     = offsetof(_state, _field),            \
+    .bit_field_offset = (_offset),                              \
     .bit_field_mask = (_mask),                                  \
-    .bit_field_name = _name,                                  \
+    .bit_field_name = (_alias),\
+}
+
+#define VMSTATE_QUEUE(_field, _state, _cb)\
+{\
+  .name = (stringify (_field)),\
+  .flags = VMS_QUEUE, \
+  .offset   = offsetof(_state, _field),\
+  .queue_print_cb = _cb,\
 }
 
 /* _f : field name

@@ -23,6 +23,13 @@ static struct BusInfo usb_bus_info = {
 static int next_usb_bus = 0;
 static QTAILQ_HEAD(, USBBus) busses = QTAILQ_HEAD_INITIALIZER(busses);
 
+static void print_usb_desc_string (void *usb_desc_string)
+{
+  USBDescString *uds = (USBDescString *) usb_desc_string;
+
+  printf ("HELLO WORLD!!! %d\n", uds->index);
+}
+
 const VMStateDescription vmstate_usb_device = {
     .name = "USBDevice",
     .version_id = 1,
@@ -35,6 +42,7 @@ const VMStateDescription vmstate_usb_device = {
         VMSTATE_INT32(setup_len, USBDevice),
         VMSTATE_INT32(setup_index, USBDevice),
         VMSTATE_UINT8_ARRAY(setup_buf, USBDevice, 8),
+        VMSTATE_QUEUE(strings, USBDevice, print_usb_desc_string),
         VMSTATE_END_OF_LIST(),
     }
 };
@@ -95,6 +103,15 @@ void usb_qdev_register(USBDeviceInfo *info)
     info->qdev.init     = usb_qdev_init;
     info->qdev.unplug   = qdev_simple_unplug_cb;
     info->qdev.exit     = usb_qdev_exit;
+
+    if (!info->qdev.vmsd)
+    {
+      printf ("NO VMSD for %s\n", info->usbdevice_name);
+    }
+    else
+    {
+      printf ("VMSD found with %s\n", info->usbdevice_name);
+    }
     qdev_register(&info->qdev);
 }
 
@@ -121,6 +138,7 @@ USBDevice *usb_create(USBBus *bus, const char *name)
     }
 #endif
 
+    printf ("qdev upcast time\n");
     dev = qdev_create(&bus->qbus, name);
     return DO_UPCAST(USBDevice, qdev, dev);
 }
