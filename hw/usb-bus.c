@@ -23,11 +23,6 @@ static struct BusInfo usb_bus_info = {
 static int next_usb_bus = 0;
 static QTAILQ_HEAD(, USBBus) busses = QTAILQ_HEAD_INITIALIZER(busses);
 
-static void print_usb_desc_string (void *usb_desc_string)
-{
-  USBDescString *uds = (USBDescString *) usb_desc_string;
-}
-
 const VMStateDescription vmstate_usb_device = {
     .name = "USBDevice",
     .version_id = 1,
@@ -40,7 +35,6 @@ const VMStateDescription vmstate_usb_device = {
         VMSTATE_INT32(setup_len, USBDevice),
         VMSTATE_INT32(setup_index, USBDevice),
         VMSTATE_UINT8_ARRAY(setup_buf, USBDevice, 8),
-        VMSTATE_QUEUE(strings, USBDevice, print_usb_desc_string),
         VMSTATE_END_OF_LIST(),
     }
 };
